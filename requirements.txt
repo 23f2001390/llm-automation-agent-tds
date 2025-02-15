@@ -1,0 +1,29 @@
+# Main packages from PyPI
+fastapi==0.109.2
+uvicorn==0.27.1
+pydantic==2.6.1
+google-generativeai==0.3.2
+python-dotenv==1.0.1
+httpx==0.26.0
+openai
+aiohttp==3.11.12
+pillow==11.1.0
+GitPython==3.1.42
+sqlite3-api==2.0.4
+duckdb==0.10.0
+SpeechRecognition==3.10.1
+markdown==3.6
+pandas
+faker
+aiosqlite
+scikit-learn
+aiofiles
+bs4
+beautifulsoup4
+# PyTorch and related packages
+torch
+sentence-transformers
+pydub
+openai-whisper
+ffmpeg-python
+markdown
