@@ -226,6 +226,10 @@ To test the Phase B tasks using `curl` commands, we need to create specific task
     }' http://localhost:8000/run
     ```
 
+
+
+## DOCKER
+
 ### Notes
 
 - Ensure your FastAPI application is running and accessible at `http://localhost:8000` before executing these commands.
