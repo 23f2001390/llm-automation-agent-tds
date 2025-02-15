@@ -2,9 +2,8 @@
 
 
 
-Here's the updated README.md for your project:
 
-```markdown:README.md
+
 # LLM Automation Agent
 
 A FastAPI-based automation agent that handles various AI tasks including audio transcription, image processing, and file manipulation using LLMs.
