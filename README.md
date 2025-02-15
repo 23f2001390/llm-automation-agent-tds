@@ -9,37 +9,16 @@ This FastAPI application processes various file manipulation tasks using LLM ass
 pip install -r requirements.txt
 ```
 
-2. Set up environment variables:
-Create a `.env` file with:
-```
-AIPROXY_TOKEN=your-aiproxy-token-here
-```
+2. Set up environment variables with AIPROXY_TOKEN
 
 3. Run the application:
 ```bash
-python main.py
+uv run main.py
 ```
 
 The server will start at `http://localhost:8000`
 
-## API Usage
 
-### Execute Task Endpoint
-
-```bash
-POST /execute_task
-```
-
-Request body:
-```json
-{
-    "task": "Your task description here",
-    "llm_provider": "gemini",  // or "ollama"
-    "model_name": "gemini-pro" // optional, defaults to "gemini-pro"
-}
-```
-
-Example tasks:
 ## IMPORTANT
 RUN THE TASKS IN THE FOLLOWING FORMAT:
 Below are the `curl` commands formatted in the style you provided, using the JSON structure for each task. Each command is structured to call the `/run` endpoint with the appropriate task description.
@@ -247,44 +226,8 @@ To test the Phase B tasks using `curl` commands, we need to create specific task
 
 - Ensure your FastAPI application is running and accessible at `http://localhost:8000` before executing these commands.
 - Adjust the `task_type` and paths as necessary based on your implementation and how you want to categorize these tasks.
-- Ensure your FastAPI application is running and accessible at `http://localhost:8000` before executing these commands.
 - Replace placeholders like `https://api.example.com/data`, `https://github.com/example/repo.git`, and other URLs with actual URLs as needed.
 - Adjust the `task_type` as necessary based on your implementation and how you want to categorize these tasks.
-
-1. Format markdown files:
-```json
-{
-    "task": "Format the contents of /data/format.md using prettier@3.4.2, updating the file in-place"
-}
-```
-
-2. Process dates:
-```json
-{
-    "task": "Count the number of Wednesdays in /data/dates.txt and write the result to /data/dates-wednesdays.txt"
-}
-```
-
-3. Sort JSON data:
-```json
-{
-    "task": "Sort the array of contacts in /data/contacts.json by last_name, then first_name, and write to /data/contacts-sorted.json"
-}
-```
-
-## Response Format
-
-```json
-{
-    "status": "success",
-    "task": "Original task description",
-    "generated_code": "Generated Python code",
-    "execution_result": {
-        "status": "success",
-        "message": "Task executed successfully"
-    }
-}
-```
 
 ## Error Handling
 
