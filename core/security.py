@@ -1,5 +1,6 @@
 from pathlib import Path
 from fastapi import HTTPException
+import os
 
 def validate_path_security(path: Path) -> bool:
     """Ensure path is within /data directory."""
@@ -10,12 +11,16 @@ def validate_path_security(path: Path) -> bool:
     except Exception:
         return False
 
-def secure_path(path: str) -> Path:
-    """Validate and return secure path."""
-    path_obj = Path(path)
-    if not validate_path_security(path_obj):
-        raise HTTPException(
-            status_code=403, 
-            detail="Access denied: Can only access files within /data directory"
-        )
-    return path_obj 
+def secure_path(path: Path) -> Path:
+    """Validates that a path is within the data directory."""
+    try:
+        data_dir = Path(os.getcwd()) / 'data'
+        abs_path = path.resolve()
+        if not str(abs_path).startswith(str(data_dir)):
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: Path must be within data directory"
+            )
+        return abs_path
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid path: {str(e)}") 

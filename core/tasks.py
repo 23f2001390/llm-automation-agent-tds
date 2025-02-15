@@ -2,38 +2,72 @@ import io
 from PIL import Image
 from core.config import get_data_dir
 from models.task import RunTaskRequest, RunTaskResponse
+import os
+from pathlib import Path
+import subprocess
+import json
+from typing import Dict, Any
+import logging
+from fastapi import HTTPException
+from datetime import datetime
+import re
 
 
-def execute_task(request: RunTaskRequest) -> RunTaskResponse:
+async def execute_task(request: RunTaskRequest) -> dict:
     """Executes a task based on the request."""
     try:
-        if request.task.startswith("Get the card number"):
-            image_path = get_data_dir() / "credit_card.png"
-
-            # Check if the image file exists
-            if not image_path.exists():
-                return RunTaskResponse(result=None, error=f"Image file not found: {image_path}")
-
+        task = request.task.lower()  # Convert to lowercase for easier matching
+        data_dir = Path(os.getcwd()) / 'data'
+        
+        # Handle markdown formatting task (A2)
+        if any(keyword in task for keyword in ["format", "prettier"]) and ".md" in task:
+            # Extract file path using regex
+            file_match = re.search(r'/data/([^\s]+\.md)', task)
+            if not file_match:
+                raise HTTPException(status_code=400, detail="No markdown file specified")
+                
+            file_path = data_dir / file_match.group(1)
+            if not file_path.exists():
+                raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+                
             try:
-                # Open the image using Pillow library
-                img = Image.open(image_path)
-                # Convert the image to bytes
-                img_byte_arr = io.BytesIO()
-                img.save(img_byte_arr, format='PNG')
-                img_byte_arr = img_byte_arr.getvalue()
-
-                # Placeholder: In a real application, you would send img_byte_arr to your LLM
-                #  along with the task description.  For this example, we'll simulate a result.
-                #  Replace this with your actual LLM interaction.
-                card_number = "1234-5678-9012-3456"  # Simulated result
-
-                return RunTaskResponse(result=card_number, error=None)
-
-            except Exception as e:
-                return RunTaskResponse(result=None, error=f"Image processing error: {e}")
-
+                result = subprocess.run(
+                    ["npx", "prettier@3.4.2", "--write", str(file_path)],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                return {"status": "success"}  # Simple success response
+            except subprocess.CalledProcessError as e:
+                raise HTTPException(status_code=500, detail=str(e.stderr))
+                
+        # Handle Wednesday counting task (A3)
+        elif all(keyword in task for keyword in ["dates.txt", "wednesday"]):
+            dates_file = data_dir / "dates.txt"
+            output_file = data_dir / "dates-wednesdays.txt"
+            
+            if not dates_file.exists():
+                raise HTTPException(status_code=404, detail="dates.txt not found")
+                
+            with open(dates_file) as f:
+                dates = f.readlines()
+            
+            wednesday_count = sum(
+                1 for date in dates 
+                if datetime.strptime(date.strip(), "%Y-%m-%d").weekday() == 2
+            )
+            
+            with open(output_file, 'w') as f:
+                f.write(str(wednesday_count))
+                
+            return {"status": "success"}
+            
         else:
-            return RunTaskResponse(result=None, error=f"Unknown task: {request.task}")
-
+            raise HTTPException(
+                status_code=500,
+                detail=f"Task not recognized: {task}"
+            )
+            
     except Exception as e:
-        return RunTaskResponse(result=None, error=f"An unexpected error occurred: {e}") 
+        logging.error(f"Task execution error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) 

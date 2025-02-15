@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-import google.generativeai as genai
 import os
 from typing import Optional, Dict, Any
 import asyncio
@@ -74,17 +73,10 @@ class TaskRequest(BaseModel):
     input_path: Optional[str] = None  # Must be within /data
     output_path: Optional[str] = None  # Must be within /data
 
-# LLM configuration
-load_dotenv()  # Load environment variables from .env file
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-if not GOOGLE_API_KEY:
-    raise ValueError("GOOGLE_API_KEY environment variable is not set")
-genai.configure(api_key=GOOGLE_API_KEY)
+# Load environment variables
+load_dotenv()
 
-# Add this after loading the API key
-logger.info(f"API Key loaded: {'Key exists' if GOOGLE_API_KEY else 'No key found'}")
-
-# Replace the hardcoded token with environment variable
+# Only check for AIPROXY_TOKEN
 AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
 if not AIPROXY_TOKEN:
     raise ValueError("AIPROXY_TOKEN environment variable is not set")
@@ -144,7 +136,7 @@ def create_prompt(task: str) -> str:
         "Here's the structure for email extraction:\n"
         "```python\n"
         "from pathlib import Path\n"
-        "import google.generativeai as genai\n\n"
+
         "try:\n"
         "    # Read email content\n"
         "    input_path = Path(CWD) / 'data' / 'email.txt'\n"
@@ -160,10 +152,29 @@ def create_prompt(task: str) -> str:
         "You should return exactly: john@example.com\n\n"
         "Email message:\n"
         "''' + email_content\n\n"
-        "    # Get response from Gemini\n"
-        "    model = genai.GenerativeModel('gemini-2.0-pro-exp-02-05')\n"
-        "    response = model.generate_content(prompt)\n"
-        "    sender_email = response.text.strip()\n\n"
+        "    # Get response from AI Proxy\n"
+        "    payload = {\n"
+        "        'model': 'gpt-4o-mini',\n"
+        "        'messages': [\n"
+        "            {\n"
+        "                'role': 'user',\n"
+        "                'content': prompt\n"
+        "            }\n"
+        "        ]\n"
+        "    }\n"
+        "    async with aiohttp.ClientSession() as session:\n"
+        "        async with session.post(\n"
+        "            'https://aiproxy.sanand.workers.dev/openai/v1/chat/completions',\n"
+        "            headers={\n"
+        "                'Authorization': f'Bearer {AIPROXY_TOKEN}',\n"
+        "                'Content-Type': 'application/json'\n"
+        "            },\n"
+        "            json=payload\n"
+        "        ) as response:\n"
+        "            if response.status != 200:\n"
+        "                raise ValueError(f'API request failed: {await response.text()}')\n"
+        "            result = await response.json()\n"
+        "            sender_email = result['choices'][0]['message']['content'].strip()\n\n"
         "    # Write only the email address to output file\n"
         "    with open(output_path, 'w', encoding='utf-8') as f:\n"
         "        f.write(sender_email)\n\n"
@@ -274,21 +285,41 @@ def create_prompt(task: str) -> str:
 
 async def get_code_from_gemini(prompt: str) -> str:
     try:
-        model = genai.GenerativeModel('gemini-2.0-pro-exp-02-05')
-        response = await asyncio.to_thread(
-            lambda: model.generate_content(prompt)
-        )
-
-        # Clean the response to ensure it's valid Python code
-        code = response.text.strip()
-        if code.startswith("```python"):
-            code = code.replace("```python", "", 1)
-        if code.startswith("```"):
-            code = code.replace("```", "", 1)
-        if code.endswith("```"):
-            code = code[:-3]
-
-        return code.strip()
+        # Prepare the payload for AI Proxy
+        payload = {
+            'model': 'gpt-4o-mini',
+            'messages': [
+                {
+                    'role': 'user',
+                    'content': prompt
+                }
+            ]
+        }
+        
+        # Make the request to AI Proxy
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                'https://aiproxy.sanand.workers.dev/openai/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {AIPROXY_TOKEN}',
+                    'Content-Type': 'application/json'
+                },
+                json=payload
+            ) as response:
+                if response.status != 200:
+                    raise ValueError(f'API request failed: {await response.text()}')
+                result = await response.json()
+                
+                # Extract and clean the response
+                code = result['choices'][0]['message']['content'].strip()
+                if code.startswith("```python"):
+                    code = code.replace("```python", "", 1)
+                if code.startswith("```"):
+                    code = code.replace("```", "", 1)
+                if code.endswith("```"):
+                    code = code[:-3]
+                
+                return code
     except Exception as e:
         logger.error(f"Error getting code from Gemini: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating code: {str(e)}")
@@ -530,7 +561,7 @@ async def handle_api_fetch(task: str) -> Dict[str, Any]:
     """Handle API fetch tasks securely."""
     try:
         # Extract URL and output path from task using LLM
-        code = await get_code_from_gemini(f"Generate code to: {task}")
+        code = await generate_code(f"Generate code to: {task}")
 
         # Execute in controlled environment
         with safe_execution_context():
@@ -1564,8 +1595,27 @@ async def run_task(request: Request, task: Optional[str] = None, body: Optional[
                 with open(image_path, 'rb') as f:
                     image_bytes = f.read()
 
-                # Create model
-                model = genai.GenerativeModel('gemini-2.0-pro-exp-02-05')
+                # Create AI Proxy session
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        'https://aiproxy.sanand.workers.dev/openai/v1/chat/completions',
+                        headers={
+                            'Authorization': f'Bearer {AIPROXY_TOKEN}',
+                            'Content-Type': 'application/json'
+                        },
+                        json={
+                            'model': 'gpt-4o-mini',
+                            'messages': [
+                                {
+                                    'role': 'user',
+                                    'content': 'Extract ONLY the credit card number from this image. Return ONLY digits with no spaces or other characters.'
+                                }
+                            ]
+                        }
+                    ) as response:
+                        if response.status != 200:
+                            raise ValueError(f'AI Proxy request failed: {await response.text()}')
+                        result = await response.json()
 
                 # Create message parts for Gemini
                 message = [
@@ -1614,10 +1664,28 @@ async def run_task(request: Request, task: Optional[str] = None, body: Optional[
             # Simple direct prompt
             prompt = "Find the sender's email address from this email. Return ONLY the email address from the From: line, nothing else:\n\n" + email_content
 
-            model = genai.GenerativeModel('gemini-2.0-pro-exp-02-05')
-            response = await asyncio.to_thread(
-                lambda: model.generate_content(prompt)
-            )
+            # Make the request to AI Proxy
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    'https://aiproxy.sanand.workers.dev/openai/v1/chat/completions',
+                    headers={
+                        'Authorization': f'Bearer {AIPROXY_TOKEN}',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        'model': 'gpt-4o-mini',
+                        'messages': [
+                            {
+                                'role': 'user',
+                                'content': prompt
+                            }
+                        ]
+                    }
+                ) as response:
+                    if response.status != 200:
+                        raise ValueError(f'API request failed: {await response.text()}')
+                    result = await response.json()
+                    response = result['choices'][0]['message']['content']
             sender_email = response.text.strip()
 
             # Write result
@@ -1662,7 +1730,7 @@ async def run_task(request: Request, task: Optional[str] = None, body: Optional[
         else:
             logger.info("Fallback to code generation path")
             prompt = create_prompt(task_to_execute)
-            code = await get_code_from_gemini(prompt)
+            code = await generate_code(prompt)
             with safe_execution_context():
                 return execute_generated_code(code, task_to_execute)
 
@@ -1697,8 +1765,15 @@ async def handle_ocr_task(task: str) -> Dict[str, Any]:
             image_bytes = f.read()
             
         # Create model
-        model = genai.GenerativeModel('gemini-2.0-pro-exp-02-05')
-        
+        model = {
+            'model': 'gpt-4o-mini',
+            'messages': [
+                {
+                    'role': 'user',
+                    'content': ''  # Will be populated with message content
+                }
+            ]
+        }
         # Create specific message for each type
         if is_card_number:
             message = [
@@ -1837,6 +1912,50 @@ async def handle_audio_transcription(task: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Audio transcription failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Add this function for code generation
+async def generate_code(task: str) -> str:
+    """Generate code using AIProxy."""
+    try:
+        # Prepare the payload for AI Proxy
+        payload = {
+            'model': 'gpt-4o-mini',
+            'messages': [
+                {
+                    'role': 'user',
+                    'content': create_prompt(task)
+                }
+            ]
+        }
+        
+        # Make the request to AI Proxy
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                'https://aiproxy.sanand.workers.dev/openai/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {AIPROXY_TOKEN}',
+                    'Content-Type': 'application/json'
+                },
+                json=payload
+            ) as response:
+                if response.status != 200:
+                    raise ValueError(f'API request failed: {await response.text()}')
+                result = await response.json()
+                
+                # Extract and clean the response
+                code = result['choices'][0]['message']['content'].strip()
+                if code.startswith("```python"):
+                    code = code.replace("```python", "", 1)
+                if code.startswith("```"):
+                    code = code.replace("```", "", 1)
+                if code.endswith("```"):
+                    code = code[:-3]
+                
+                logger.info(f"Generated code:\n{code}")  # Log the generated code
+                return code
+    except Exception as e:
+        logger.error(f"Error generating code: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating code: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

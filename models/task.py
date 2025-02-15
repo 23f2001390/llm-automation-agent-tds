@@ -22,6 +22,7 @@ class TaskRequest(BaseModel):
     output_path: Optional[str] = None  # Must be within /data
 
 
-class RunTaskResponse(BaseModel):
-    result: str | None  # Allow None for cases where the task might not produce a result
-    error: str | None  # Include an error field 
+class RunTaskRequest(BaseModel):
+    task: str
+
+# No need for RunTaskResponse as we're returning dict directly 

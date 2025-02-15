@@ -8,6 +8,6 @@ services:
       - ./data:/app/data
     environment:
       - AIPROXY_TOKEN=${AIPROXY_TOKEN}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY} 
+    command: >
+      bash -c "pip install httpie && 
+      uvicorn main:app --host 0.0.0.0 --port 8000"
