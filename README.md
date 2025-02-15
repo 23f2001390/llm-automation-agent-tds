@@ -1,12 +1,16 @@
-# Dynamic Task Processor API
-
-This FastAPI application processes various file manipulation tasks using LLM assistance. It can handle tasks like file formatting, data analysis, and file modifications using either Google's Gemini or Ollama as the LLM provider.
-
 ## Setup
 
-1. Install dependencies:
+1. Use uv venv to create virtual environment in git bash
+2. Activate venv using
 ```bash
-pip install -r requirements.txt
+source .venv/Scripts/activate
+```
+above in windows
+
+
+3. Install dependencies:
+```bash
+uv pip install -r requirements.txt
 ```
 
 2. Set up environment variables with AIPROXY_TOKEN
@@ -19,7 +23,7 @@ uv run main.py
 The server will start at `http://localhost:8000`
 
 
-## IMPORTANT
+### IMPORTANT
 RUN THE TASKS IN THE FOLLOWING FORMAT:
 Below are the `curl` commands formatted in the style you provided, using the JSON structure for each task. Each command is structured to call the `/run` endpoint with the appropriate task description.
 
